@@ -1,0 +1,17 @@
+# Sanal Ortam Klasörü
+venv/
+__pycache__/
+
+# Google OAuth Token Dosyası ve Kimlik Bilgileri
+token.json
+credentials.json
+
+# İde/Editör Ayar Dosyaları
+.vscode/
+.idea/
+
+# İşletim Sistemi Dosyaları
+.DS_Store
+
+# Konfigürasyon Dosyası 
+config.ini
