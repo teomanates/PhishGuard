@@ -41,15 +41,6 @@ def extract_links(html_content):
     
     return all_links
 
-"""
-    if not html_content:
-        return []  # Eğer içerik boşsa, boş liste döner
-
-    soup = BeautifulSoup(html_content, 'html.parser')  # HTML içeriğini BeautifulSoup ile ayrıştırır
-    links = [a['href'] for a in soup.find_all('a', href=True)]  # Tüm <a> etiketlerinden 'href' özniteliklerini alır
-    return links  # Linkleri liste olarak döner
-"""
-
 
 def check_links_with_virustotal(link, api_key): # Virustotal API ile linkleri kontrol eder
 
@@ -304,16 +295,16 @@ def main():
                         links_scan_details.append(f"[UYARI] VirusTotal API sorunu: {status}")
                         break
                     
-                    """
+                    
                     print("[BİLGİ] API limitine takılmamak için 16 saniye bekleniyor...")
                     time.sleep(16)
-                    """
+                    
 
             print(f"Gönderen: {sender}")
             print(f"Konu: {subject}")
             #print(f"Risk Skoru: {risk_score}")
 
-            if risk_score >= risk_t:  # Eğer risk skoru belirlenen eşiği aşıyorsa, kullanıcıya uyarı verir.
+            if risk_score >= risk_threshold:  # Eğer risk skoru belirlenen eşiği aşıyorsa, kullanıcıya uyarı verir.
                 print("⚠️ Uyarı: Bu e-posta şüpheli görünüyor! ⚠️")
 
                 print("Detaylar:")
@@ -327,8 +318,6 @@ def main():
                 print("✅ Bu e-posta güvenli görünüyor.\n")
         
         print("\n--- PhishGuard Analizi Tamamlandı ---")
-        
-
         
 
     except HttpError as error:  # API isteklerinde hata oluşursa yakalar.
