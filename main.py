@@ -4,6 +4,9 @@ import requests  # HTTP istekleri yapmak için kullanılır.
 import hashlib  # Dosya ve dizin işlemleri için kullanılır.
 import base64  # Base64 kodlama ve çözme işlemleri için kullanılır.
 import re # Düzenli ifadeler (regex) ile metin işleme için kullanılır.
+import configparser  # Yapılandırma dosyalarını okumak için kullanılır.
+import whois  # WHOIS sorguları yapmak için kullanılır, domain bilgilerini almak için.
+from datetime import datetime  # Tarih ve saat işlemleri için kullanılır.
 from bs4 import BeautifulSoup  # HTML ve XML belgelerini ayrıştırmak için kullanılır.
 from google.auth.transport.requests import Request #Google API token'ını yenilemek için gerekli istek (HTTP) aracı.
 from google.oauth2.credentials import Credentials # Daha önce alınmış token bilgilerinden kimlik bilgisi (credentials) oluşturmak için.
@@ -15,6 +18,42 @@ from thefuzz import fuzz # Metin benzerliği ölçmek için kullanılır (örne�
 # uygulamanın hangi izinlere ihtiyaç duyduğunu belirtir
 # .readonly izinleri sadece okuma erişimi için kullanılır
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+
+def check_domain_heuristics(link):
+    """
+    Bir linkin domain'i üzerinde sezgisel analizler yapar (örn: domain yaşı).
+    Şüpheli bir durum varsa risk puanı ve açıklama döndürür.
+    """
+    try:
+        # Linkten domaini alalım
+        # 'https://www.google.com/search?q=test' -> 'google.com'
+
+        domain = re.search(r'https?://(?:www\.)?([^/]+)', link).group(1)  # RegEx ile domaini alır
+
+        # WHOIS sorgusu yaparak domain yaşını alalım
+        w = whois.whois(domain)  
+
+        # Domainin kayıt tarihi var mı?
+        if not w.creation_date:
+            return 0, "Domain kayıt tarihi bulunamadı."
+
+        # Bazen tarih tek bir değer, bazen liste olarak gelebilir   
+        creation_date = w.creation_date[0] if isinstance(w.creation_date, list) else w.creation_date
+
+        # Domainin yaşı hesaplanır
+        domain_age = (datetime.now() - creation_date).days  # Gün cinsinden domain yaşı
+
+        # Domain yaşı 1 yıldan az ise risk puanı artırılır
+        if domain_age < 365:
+            risk_score = 50
+            details = f"Çok yeni bir domain tespiti: '{domain}' alan adı sadece {domain_age} gün önce kaydedilmiş! Bu şüpheli bir durum."
+            return risk_score, details            
+
+        return 0, ""  # Eğer domain yaşı 1 yıldan fazlaysa risk yok
+
+    except Exception as e:
+        # Eğer bir hata oluşursa (örneğin, WHOIS sorgusu başarısız olursa), risk puanı artırılır
+        return 30, f"Domain analizi sırasında hata oluştu: {str(e)}"
 
 
 def extract_links(html_content):
@@ -286,18 +325,30 @@ def main():
             if links:
                 links_scan_details.append(f"Toplam {len(links)} link bulundu. Taranıyor...")
                 for link in links[:4]:
+                    print(f"\n[BİLGİ] Adım 1: VirusTotal'da taranıyor -> {link}")
                     status, dangerous_count = check_links_with_virustotal(link, virustotal_api_key)  # Her link için VirusTotal API ile kontrol yapılır.
 
                     if status == "DANGEROUS":
                         risk_score += 100
                         links_scan_details.append(f"!!! TEHLİKELİ LİNK: {link} ({dangerous_count} motor)\n")
+                    
+                    elif status == "SAFE" or status == "NOT_FOUND": # eğer virüs total'da link bulunamazsa veya güvenli ise yine de kontrol edilir
+                        print(f"[BİLGİ] Adım 2: Sezgisel analiz yapılıyor -> {link}")
+                        heuristic_score, heuristic_details = check_domain_heuristics(link)  # Domain üzerinde sezgisel analiz yapılır.
+                        if heuristic_score > 0:
+                            risk_score += heuristic_score
+                            links_scan_details.append(heuristic_details)
+
+
                     elif status in ["API_KEY_MISSING", "API_LIMIT_EXCEEDED"]:
                         links_scan_details.append(f"[UYARI] VirusTotal API sorunu: {status}")
                         break
                     
                     
-                    print("[BİLGİ] API limitine takılmamak için 16 saniye bekleniyor...")
-                    time.sleep(16)
+                    """print("[BİLGİ] API limitine takılmamak için 16 saniye bekleniyor...")
+                    time.sleep(16)"""
+            
+
                     
 
             print(f"Gönderen: {sender}")
@@ -316,6 +367,10 @@ def main():
             
             else:
                 print("✅ Bu e-posta güvenli görünüyor.\n")
+            
+            print("-------------------------------------------------------------------------------")
+            print("-------------------------------------------------------------------------------")
+            print("-------------------------------------------------------------------------------")
         
         print("\n--- PhishGuard Analizi Tamamlandı ---")
         
